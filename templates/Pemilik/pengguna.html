@@ -1,0 +1,141 @@
+{% extends "pemilik/base_pemilik.html" %} {% block title %} Photo {% endblock %}
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="card my-4">
+      <div class="card-header p-0 position-relative mt-n4 mx-3 z-index-2">
+        <div class="bg-admin shadow-dark border-radius-lg pt-4 pb-3">
+          <div class="row">
+            <div class="col-6 d-flex align-items-center">
+              <h5 class="text-white text-capitalize ps-3">Pengguna</h5>
+            </div>
+            <div class="col-6 text-end">
+              <a
+                class="btn btn-light btn-sm text-capitalize mb-0 me-4 fs-6 fw-normal"
+                href="/admin_layananFotografi_tambah"
+              >
+                <i class="material-icons text-dark me-1 fs-4">add</i>
+                &nbsp;&nbsp;Tambah Pengguna
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card-body px-0 pb-2">
+        <div class="table-responsive p-0">
+          <table id="dataTable" class="table align-items-center mb-0">
+            <thead>
+              <tr>
+                <th
+                  class="text-center text-dark fs-7 fw-bold"
+                  style="width: 50px"
+                ></th>
+                <th class="text-center text-dark fs-7 fw-bold">Nama</th>
+                <th class="text-center text-dark fs-7 fw-bold">
+                  Nama Pengguna
+                </th>
+                <th class="text-center text-dark fs-7 fw-bold">Peran</th>
+                <th class="text-center text-dark fs-7 fw-bold">Aksi</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for layanan in layanan %}
+              <tr>
+                <td class="text-center align-middle">{{ loop.index }}.</td>
+                <td class="text-center align-middle">
+                  <img
+                    src="../static/images/imgLayanan/{{ layanan.gambar }}"
+                    style="width: 80px; height: 80px; object-fit: cover"
+                    class="border-radius-lg"
+                    alt="gambar layanan"
+                  />
+                </td>
+                <td class="text-center align-middle">
+                  <span class="mb-0" style="font-weight: normal"
+                    >{{ layanan.nama }}</span
+                  >
+                </td>
+                <td class="text-center align-middle">
+                  <span
+                    class="mb-0"
+                    style="font-weight: normal"
+                    title="{{ layanan.deskripsi }}"
+                  >
+                    {{ layanan.deskripsi[:20] }}{% if layanan.deskripsi|length >
+                    20 %}...{% endif %}
+                  </span>
+                </td>
+                <td class="text-center align-middle">
+                  <!-- Toggle Aktif -->
+                  <div class="d-inline-flex align-items-center me-4">
+                    <div class="form-check form-switch mb-0">
+                      <input
+                        class="form-check-input toggle-hijau"
+                        type="checkbox"
+                        id="toggleAktif{{ layanan._id }}"
+                        {%
+                        if
+                        layanan.status
+                        %}checked{%
+                        endif
+                        %}
+                        onchange="ubahStatus('{{ layanan._id }}')"
+                      />
+                      <span id="statusLabel{{ layanan._id }}">
+                        {{ "Aktif" if layanan.status else "Tidak Aktif" }}
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Tombol Ubah -->
+                  <div class="d-inline-flex align-items-center">
+                    <a
+                      href="/admin_layananFotografi_ubah"
+                      class="text-dark d-flex align-items-center text-decoration-none"
+                    >
+                      <i class="material-icons me-1">edit</i>
+                      <span class="mb-0" style="font-weight: normal">Ubah</span>
+                    </a>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Custom hijau untuk toggle switch */
+  .form-check-input.toggle-hijau:checked {
+    background-color: #00c851; /* hijau */
+    border-color: #00c851;
+  }
+
+  .form-check-input.toggle-hijau:focus {
+    box-shadow: 0 0 0 0.25rem rgba(0, 200, 81, 0.25);
+  }
+</style>
+
+<script>
+  function ubahStatus(id) {
+    const toggle = document.getElementById("toggleAktif" + id);
+    const label = document.getElementById("statusLabel" + id);
+    const baru = toggle.checked;
+
+    // Ubah label di UI
+    label.textContent = baru ? "Aktif" : "Tidak Aktif";
+
+    // Kirim ke server
+    fetch(`/admin_layananFotografi_toggle/${id}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: baru }),
+    }).catch(console.error);
+  }
+</script>
+
+{% endblock %}
