@@ -27,6 +27,8 @@ import webbrowser
 from flask_mail import Mail, Message
 import jwt
 
+import midtransclient
+
 
 # Koneksi ke database MongoDB
 connection_string = "mongodb+srv://test:sparta@cluster0.9kunvma.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0"
@@ -41,7 +43,7 @@ app.secret_key = "super-secret-key"
 # Route untuk halaman user
 @app.route("/")
 def beranda():
-    return render_template("user/beranda.htmll")
+    return render_template("user/beranda.html")
 
 
 # -- Tambahan untuk bagian login, daftar, dkk ---
@@ -1286,309 +1288,294 @@ def api_all_lokasi():
 
 
 # Admin - Pesanan
-@app.route("/admin_pesanan")
+@app.route('/admin_pesanan')
 def admin_pesanan():
-    pesanan = list(db.pesanan.find().sort("created_at", -1))
-    layanan_map = {str(l["_id"]): l["nama"] for l in db.layanan.find()}
+    pesanan = list(db.pesanan.find().sort('created_at', -1))
+    layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
 
     # Tambahkan nama layanan ke dalam setiap dokumen pesanan
     for p in pesanan:
-        layanan_id = str(p.get("layanan_id"))
-        p["layanan"] = layanan_map.get(layanan_id, "Tidak ditemukan")
+        layanan_id = str(p.get('layanan_id'))
+        p['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
+       
 
-        if isinstance(p.get("tanggal_mulai_acara"), datetime):
-            p["tanggal_mulai_acara_formatted"] = tanggal_id(p["tanggal_mulai_acara"])
-        if isinstance(p.get("tanggal_selesai_acara"), datetime):
-            p["tanggal_selesai_acara_formatted"] = tanggal_id(
-                p["tanggal_selesai_acara"]
-            )
-    return render_template(
-        "admin/pesanan.html", pesanan=pesanan, current_route=request.path
-    )
+        if isinstance(p.get('tanggal_mulai_acara'), datetime):
+            p['tanggal_mulai_acara_formatted'] = tanggal_id(p['tanggal_mulai_acara'])
+        if isinstance(p.get('tanggal_selesai_acara'), datetime):
+            p['tanggal_selesai_acara_formatted'] = tanggal_id(p['tanggal_selesai_acara'])
+    return render_template('admin/pesanan.html', pesanan=pesanan, current_route=request.path)
 
-
-UPLOAD_FOLDER_SURAT_IZIN = "static/suratIzin"
+UPLOAD_FOLDER_SURAT_IZIN = 'static/suratIzin'
 if not os.path.exists(UPLOAD_FOLDER_SURAT_IZIN):
     os.makedirs(UPLOAD_FOLDER_SURAT_IZIN)
-app.config["UPLOAD_FOLDER_SURAT_IZIN"] = UPLOAD_FOLDER_SURAT_IZIN
-
-ADDITIONAL_DAY_COST_PER_DAY = 500000
+app.config['UPLOAD_FOLDER_SURAT_IZIN'] = UPLOAD_FOLDER_SURAT_IZIN
 
 
-@app.route("/admin_pesanan_tambah", methods=["GET", "POST"])
+
+@app.route('/admin_pesanan_tambah', methods=['GET', 'POST'])
 def admin_pesanan_tambah():
-    if request.method == "POST":
+    if request.method == 'POST':
         try:
             # Mengambil data dari form
-            tanggal_pemesanan_str = request.form["tanggal_pemesanan"]
-            layanan_id = request.form["layanan_id"]  # From hidden input
-            paket_id = request.form["paket_id"]  # From hidden input
-            nama_klien = request.form["nama_klien"]
-            nama_orang_tua = request.form["nama_orang_tua"]
-            telepon_orang_tua = request.form["telepon_orang_tua"]
-            email_klien = request.form["email_klien"]
-            telepon_klien = request.form["telepon_klien"]
-            whatsapp_klien = request.form["whatsapp_klien"]
-            instagram_klien = request.form.get("instagram_klien", "")
-            facebook_klien = request.form.get("facebook_klien", "")
+            tanggal_pemesanan_str = request.form['tanggal_pemesanan']
+            layanan_id = request.form['layanan_id'] # From hidden input
+            paket_id = request.form['paket_id']     # From hidden input
+            nama_klien = request.form['nama_klien']
+            nama_orang_tua = request.form['nama_orang_tua']
+            email_klien = request.form['email_klien']
+            telepon_klien = request.form['telepon_klien']
+            instagram_klien = request.form.get('instagram_klien', '')
+            facebook_klien = request.form.get('facebook_klien', '')
 
-            jam_acara_str = request.form["jam_acara"]
-            tanggal_mulai_acara_str = request.form["tanggal_mulai_acara"]
-            tanggal_selesai_acara_str = request.form["tanggal_selesai_acara"]
+            jam_acara_str = request.form['jam_acara']
+            tanggal_mulai_acara_str = request.form['tanggal_mulai_acara']
+            tanggal_selesai_acara_str = request.form['tanggal_selesai_acara']
 
-            lokasi_luar_str = request.form["lokasi_luar"]
-            lokasi_luar = True if lokasi_luar_str == "iya" else False
+            lokasi_luar_str = request.form['lokasi_luar']
+            lokasi_luar = True if lokasi_luar_str == 'iya' else False
 
-            lokasi_pilihan_user = request.form.get("lokasi_id")
+            lokasi_pilihan_user = request.form.get('lokasi_id')
 
-            alamat_lokasi_manual = request.form.get("alamat_lokasi_manual", "")
-            link_maps_manual = request.form.get("link_maps_manual", "")
+            alamat_lokasi_manual = request.form.get('alamat_lokasi_manual', '')
+            link_maps_manual = request.form.get('link_maps_manual', '')
 
-            biaya_transportasi_str = request.form.get("biaya_transportasi", "0")
-            # Sanitize input: remove non-numeric chars except the dot for float conversion
-            # Then convert to int (assuming integer prices for now)
-            biaya_transportasi = (
-                int(biaya_transportasi_str.replace(".", "").replace(",", ""))
-                if biaya_transportasi_str.replace(".", "").replace(",", "").isdigit()
-                else 0
-            )
+
+
 
             # Konversi tanggal dan waktu
-            tanggal_pemesanan = datetime.strptime(tanggal_pemesanan_str, "%Y-%m-%d")
+            tanggal_pemesanan = datetime.strptime(tanggal_pemesanan_str, '%Y-%m-%d')
             jam_acara = jam_acara_str
-            tanggal_mulai_acara = datetime.strptime(tanggal_mulai_acara_str, "%Y-%m-%d")
-            tanggal_selesai_acara = datetime.strptime(
-                tanggal_selesai_acara_str, "%Y-%m-%d"
+            tanggal_mulai_acara = datetime.strptime(tanggal_mulai_acara_str, '%Y-%m-%d')
+            tanggal_selesai_acara = datetime.strptime(tanggal_selesai_acara_str, '%Y-%m-%d')
+
+           
+            harga_paket = float(request.form.get('harga_paket_dasar', '0'))
+            deposit_paket = float(request.form.get('deposit_paket_dasar', '0'))
+
+
+
+            biaya_transportasi = int(
+                request.form.get("biaya_transportasi") or 0
+            )  
+            biaya_tambah_hari = int(
+                request.form.get("biayaTambahHari") or 0
+            )  
+            biaya_lokasi = int(
+                request.form.get("biayaLokasi") or 0
             )
 
-            # Get harga paket dan deposit dari form (hidden fields)
-            # This is important: Use the values sent from the form, which were derived from the DB
-            harga_paket = float(request.form.get("harga_paket_dasar", "0"))
-            deposit_paket = float(request.form.get("deposit_paket_dasar", "0"))
 
-            # Calculate Biaya Tambah Hari
-            diff_days = (tanggal_selesai_acara - tanggal_mulai_acara).days
-            biaya_tambahan_hari = 0
-            if diff_days > 0:  # Only charge for additional days beyond the first
-                biaya_tambahan_hari = diff_days * ADDITIONAL_DAY_COST_PER_DAY
 
             # Determine Lokasi details and cost
-            biaya_lokasi = 0
             alamat_lokasi_final = None
             link_maps_final = None
             lokasi_id_db = None
 
             if lokasi_pilihan_user == "pilih_lokasi_sendiri":
-                biaya_lokasi = 0  # No additional cost for custom location
                 alamat_lokasi_final = alamat_lokasi_manual
                 link_maps_final = link_maps_manual
             elif lokasi_pilihan_user:
-                selected_lokasi = db.lokasi.find_one(
-                    {"_id": ObjectId(lokasi_pilihan_user)}
-                )
+                selected_lokasi = db.lokasi.find_one({'_id': ObjectId(lokasi_pilihan_user)})
                 if selected_lokasi:
-                    biaya_lokasi = selected_lokasi.get("biaya", 0)
-                    alamat_lokasi_final = selected_lokasi.get("alamat")
-                    link_maps_final = selected_lokasi.get("link_maps")
+                    alamat_lokasi_final = selected_lokasi.get('alamat')
+                    link_maps_final = selected_lokasi.get('link_maps')
                     lokasi_id_db = ObjectId(lokasi_pilihan_user)
-            else:  # If no location is selected (e.g., optional field but client left it blank)
-                biaya_lokasi = 0
+            else: 
                 alamat_lokasi_final = ""
                 link_maps_final = ""
 
-            # Recalculate Total Harga and Sisa Bayar on backend
-            # Use the harga_paket and deposit_paket obtained from the form's hidden fields
-            recalculated_total_harga = (
-                harga_paket + biaya_tambahan_hari + biaya_lokasi + biaya_transportasi
-            )
+            recalculated_total_harga = harga_paket + biaya_tambah_hari + biaya_lokasi + biaya_transportasi
             recalculated_sisa_bayar = recalculated_total_harga - deposit_paket
 
             # Handle upload Surat Izin Lokasi (Opsional)
             surat_izin_lokasi_filename = None
-            if "surat_izin_lokasi" in request.files:
-                surat_izin_file = request.files["surat_izin_lokasi"]
-                if surat_izin_file and surat_izin_file.filename != "":
+            if 'surat_izin_lokasi' in request.files:
+                surat_izin_file = request.files['surat_izin_lokasi']
+                if surat_izin_file and surat_izin_file.filename != '':
                     filename_ext = os.path.splitext(surat_izin_file.filename)
                     # Use sanitized client name for filename
                     unique_filename = f"{sanitize_filename(nama_klien)}_surat_izin_{int(time.time())}{filename_ext[1]}"
-                    file_path = os.path.join(
-                        app.config["UPLOAD_FOLDER_SURAT_IZIN"], unique_filename
-                    )
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER_SURAT_IZIN'], unique_filename)
                     surat_izin_file.save(file_path)
                     surat_izin_lokasi_filename = unique_filename
 
             # Buat dokumen pesanan
             pesanan_doc = {
-                "tanggal_pemesanan": tanggal_pemesanan,  # Store as datetime object
-                "layanan_id": ObjectId(layanan_id),
-                "paket_id": ObjectId(paket_id),
-                "nama_klien": nama_klien,
-                "nama_orang_tua": nama_orang_tua,
-                "telepon_orang_tua": telepon_orang_tua,
-                "email_klien": email_klien,
-                "telepon_klien": telepon_klien,
-                "whatsapp_klien": whatsapp_klien,
-                "instagram_klien": instagram_klien,
-                "facebook_klien": facebook_klien,
-                "jam_acara": jam_acara,
-                "tanggal_mulai_acara": tanggal_mulai_acara,  # Store as datetime object
-                "tanggal_selesai_acara": tanggal_selesai_acara,  # Store as datetime object
-                "lokasi_luar_labuhanbatu": lokasi_luar,
-                "lokasi_id": lokasi_id_db,
-                "alamat_lokasi_acara": alamat_lokasi_final,
-                "link_maps_acara": link_maps_final,
-                "surat_izin_lokasi": surat_izin_lokasi_filename,
-                "biaya_transportasi_akomodasi": biaya_transportasi,
-                "biaya_tambahan_hari": biaya_tambahan_hari,
-                "biaya_lokasi": biaya_lokasi,
-                "harga_paket": harga_paket,  # Store base package price from form
-                "deposit": deposit_paket,  # Store base deposit from form
-                "total_harga": recalculated_total_harga,  # Store calculated total
-                "sisa_bayar": recalculated_sisa_bayar,  # Store calculated remaining payment
-                "status_pesanan": "Menunggu Konfirmasi",
-                "created_at": datetime.utcnow(),
+                'tanggal_pemesanan': tanggal_pemesanan, # Store as datetime object
+                'layanan_id': ObjectId(layanan_id),
+                'paket_id': ObjectId(paket_id),
+                'nama_klien': nama_klien,
+                'nama_orang_tua': nama_orang_tua,
+                'email_klien': email_klien,
+                'telepon_klien': telepon_klien,
+                'instagram_klien': instagram_klien,
+                'facebook_klien': facebook_klien,
+                'jam_acara': jam_acara,
+                'tanggal_mulai_acara': tanggal_mulai_acara, 
+                'tanggal_selesai_acara': tanggal_selesai_acara, 
+                'lokasi_luar_labuhanbatu': lokasi_luar,
+                'lokasi_id': lokasi_id_db,
+                'alamat_lokasi_acara': alamat_lokasi_final,
+                'link_maps_acara': link_maps_final,
+                'surat_izin_lokasi': surat_izin_lokasi_filename,
+                'biaya_transportasi_akomodasi': biaya_transportasi,
+                'biaya_tambah_hari': biaya_tambah_hari,
+                'biaya_lokasi': biaya_lokasi,
+                'harga_paket': harga_paket, 
+                'deposit': deposit_paket,   
+                'total_harga': recalculated_total_harga, 
+                'sisa_bayar': recalculated_sisa_bayar,  
+                'status_pesanan': 'Menunggu Konfirmasi',
+                'created_at': datetime.utcnow()
             }
 
             db.pesanan.insert_one(pesanan_doc)
             flash("Pesanan berhasil dibuat!", "success")
-            return redirect(
-                url_for("admin_pesanan")
-            )  # Redirect to admin pesanan list after successful booking
+            return redirect(url_for("admin_pesanan")) 
 
         except Exception as e:
             print(f"Error adding order: {e}")
             flash(f"Terjadi kesalahan saat menambahkan pesanan: {e}", "danger")
-            # If there's an error, re-render the form with existing data if possible
-            layanan_list = list(db.layanan.find({"status": True}))
-            lokasi_list = list(db.lokasi.find({"is_active": True}))
+            layanan_list = list(db.layanan.find({'status': True}))
+            lokasi_list = list(db.lokasi.find({'is_active': True}))
             for layanan in layanan_list:
-                layanan["_id"] = str(layanan["_id"])
+                layanan['_id'] = str(layanan['_id'])
             for lokasi in lokasi_list:
-                lokasi["_id"] = str(lokasi["_id"])
-            return render_template(
-                "user/booking.html",
-                layanan_list=layanan_list,
-                lokasi_list=lokasi_list,
-                error_message=f"Terjadi kesalahan: {e}",
-                selected_paket_id=request.form.get("paket_id"),
-                selected_layanan_id=request.form.get("layanan_id"),
-                selected_paket_nama=request.form.get("paket_nama"),
-                selected_paket_harga_raw=float(
-                    request.form.get("harga_paket_dasar", "0")
-                ),
-                selected_paket_deposit_raw=float(
-                    request.form.get("deposit_paket_dasar", "0")
-                ),
-            )
+                lokasi['_id'] = str(lokasi['_id'])
+            return render_template('user/booking.html',
+                                   layanan_list=layanan_list, 
+                                   lokasi_list=lokasi_list,
+                                   error_message=f"Terjadi kesalahan: {e}",
+                                   selected_paket_id=request.form.get('paket_id'),
+                                   selected_layanan_id=request.form.get('layanan_id'),
+                                   selected_paket_nama=request.form.get('paket_nama'), 
+                                   selected_paket_harga_raw=float(request.form.get('harga_paket_dasar', '0')),
+                                   selected_paket_deposit_raw=float(request.form.get('deposit_paket_dasar', '0'))
+                                   )
 
-    layanan_list = list(db.layanan.find({"status": True}))
-    lokasi_list = list(db.lokasi.find({"is_active": True}))
+   
+    layanan_list = list(db.layanan.find({'status': True}))
+    lokasi_list = list(db.lokasi.find({'is_active': True}))
     for layanan in layanan_list:
-        layanan["_id"] = str(layanan["_id"])
+        layanan['_id'] = str(layanan['_id'])
     for lokasi in lokasi_list:
-        lokasi["_id"] = str(lokasi["_id"])
-    return render_template(
-        "admin/pesanan_tambah.html", layanan_list=layanan_list, lokasi_list=lokasi_list
-    )
+        lokasi['_id'] = str(lokasi['_id'])
+    return render_template('admin/pesanan_tambah.html',
+                           layanan_list=layanan_list,
+                           lokasi_list=lokasi_list)
 
-
-@app.route("/admin_pesanan_detail")
+@app.route('/admin_pesanan_detail')
 def admin_pesanan_detail():
-    pesanan_id = request.args.get("pesanan_id")
+    pesanan_id = request.args.get('pesanan_id')
 
-    # Tambahkan pengecekan ini
     if not pesanan_id:
         flash("ID Pesanan tidak ditemukan.", "danger")
-        return redirect(url_for("admin_pesanan"))
+        return redirect(url_for('admin_pesanan'))
 
     try:
-        pesanan = db.pesanan.find_one({"_id": ObjectId(pesanan_id)})
+        pesanan = db.pesanan.find_one({'_id': ObjectId(pesanan_id)})
 
         # Pengecekan jika pesanan tidak ditemukan di database
         if not pesanan:
             flash(f"Pesanan dengan ID '{pesanan_id}' tidak ditemukan.", "danger")
-            return redirect(url_for("admin_pesanan"))
+            return redirect(url_for('admin_pesanan'))
 
         # Buat map nama layanan, paket, dan lokasi berdasarkan _id
-        layanan_map = {str(l["_id"]): l["nama"] for l in db.layanan.find()}
-        paket_map = {str(l["_id"]): l["nama"] for l in db.paket.find()}
-        lokasi_map = {str(l["_id"]): l["nama"] for l in db.lokasi.find()}
+        layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
+        paket_map = {str(l['_id']): l['nama'] for l in db.paket.find()}
+        lokasi_map = {str(l['_id']): l['nama'] for l in db.lokasi.find()}
 
         # Konversi ObjectId pesanan ke string untuk digunakan di URL/form
-        pesanan["_id"] = str(pesanan["_id"])
+        pesanan['_id'] = str(pesanan['_id'])
 
         # Layanan
-        layanan_id = str(pesanan.get("layanan_id", ""))
-        pesanan["layanan"] = layanan_map.get(layanan_id, "Tidak ditemukan")
+        layanan_id = str(pesanan.get('layanan_id', ''))
+        pesanan['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
 
         # Paket
-        paket_id = str(pesanan.get("paket_id", ""))
-        pesanan["paket"] = paket_map.get(paket_id, "Tidak ditemukan")
+        paket_id = str(pesanan.get('paket_id', ''))
+        pesanan['paket'] = paket_map.get(paket_id, 'Tidak ditemukan')
 
         # Lokasi (bisa None atau kosong jika input manual)
-        lokasi_id = str(pesanan.get("lokasi_id", ""))
+        lokasi_id = str(pesanan.get('lokasi_id', ''))
         if lokasi_id and lokasi_id != "None":
-            pesanan["lokasi"] = lokasi_map.get(lokasi_id, "Tidak ditemukan")
+            pesanan['lokasi'] = lokasi_map.get(lokasi_id, 'Tidak ditemukan')
         else:
-            pesanan["lokasi"] = (
-                "Lokasi pilihan sendiri"
-                if pesanan.get("alamat_lokasi_acara")
-                else "Tidak tersedia"
-            )
+            pesanan['lokasi'] = 'Lokasi pilihan sendiri' if pesanan.get('alamat_lokasi_acara') else 'Tidak tersedia'
 
         # Format tanggal
-        if isinstance(pesanan.get("tanggal_pemesanan"), datetime):
-            pesanan["tanggal_pemesanan_formatted"] = tanggal_id(
-                pesanan["tanggal_pemesanan"]
-            )
-        if isinstance(pesanan.get("tanggal_mulai_acara"), datetime):
-            pesanan["tanggal_mulai_acara_formatted"] = tanggal_id(
-                pesanan["tanggal_mulai_acara"]
-            )
-        if isinstance(pesanan.get("tanggal_selesai_acara"), datetime):
-            pesanan["tanggal_selesai_acara_formatted"] = tanggal_id(
-                pesanan["tanggal_selesai_acara"]
-            )
+        if isinstance(pesanan.get('tanggal_pemesanan'), datetime):
+            pesanan['tanggal_pemesanan_formatted'] = tanggal_id(pesanan['tanggal_pemesanan'])
+        if isinstance(pesanan.get('tanggal_mulai_acara'), datetime):
+            pesanan['tanggal_mulai_acara_formatted'] = tanggal_id(pesanan['tanggal_mulai_acara'])
+        if isinstance(pesanan.get('tanggal_selesai_acara'), datetime):
+            pesanan['tanggal_selesai_acara_formatted'] = tanggal_id(pesanan['tanggal_selesai_acara'])
 
-        return render_template(
-            "admin/pesanan_detail.html", pesanan=[pesanan], current_route=request.path
-        )
+        return render_template('admin/pesanan_detail.html', pesanan=[pesanan], current_route=request.path)
 
     except Exception as e:
         flash(f"Terjadi kesalahan saat mengambil detail pesanan: {e}", "danger")
-        return redirect(url_for("admin_pesanan"))
+        return redirect(url_for('admin_pesanan'))
 
 
-@app.route("/admin_pesanan_update/<pesanan_id>", methods=["POST"])
+@app.route('/admin_pesanan_update/<pesanan_id>', methods=['POST'])
 def admin_pesanan_update(pesanan_id):
-    status = request.form.get("status_pesanan")
-    catatan = request.form.get("catatan")
-    link_drive = request.form.get("link_google_drive")
-    biaya_transportasi_str = (
-        request.form.get("biaya_transportasi", "0").replace(".", "").replace(",", "")
-    )
-    try:
-        biaya_transportasi = int(biaya_transportasi_str)
-    except ValueError:
-        biaya_transportasi = 0
+    pesanan = db.pesanan.find_one({'_id': ObjectId(pesanan_id)})
+
+    if not pesanan:
+        flash("Pesanan tidak ditemukan.", "danger")
+        return redirect(url_for('admin_pesanan'))
+
+    status = request.form.get('status_pesanan')
+    catatan = request.form.get('catatan')
+    link_drive = request.form.get('link_google_drive')
+
+    def parse_currency_input(value_str):
+        if value_str:
+            # hapus dots dan koma, lalu convert ke int
+            clean_value = value_str.replace('.', '').replace(',', '')
+            try:
+                return int(clean_value)
+            except ValueError:
+                return 0
+        return 0
+    
+    biaya_tambah_hari = parse_currency_input(request.form.get('biaya_tambah_hari'))
+    biaya_lokasi = parse_currency_input(request.form.get('biaya_lokasi'))
+    biaya_transportasi = parse_currency_input(request.form.get('biaya_transportasi'))
+
+    # Ambil harga_paket dan deposit_paket dari data pesanan yang ada
+    harga_paket = pesanan.get('harga_paket', 0)
+    deposit_paket = pesanan.get('deposit_paket', 0)
+
+    # Hitung ulang total_harga dan sisa_bayar
+    recalculated_total_harga = harga_paket + biaya_tambah_hari + biaya_lokasi + biaya_transportasi
+    recalculated_sisa_bayar = recalculated_total_harga - deposit_paket
 
     update_data = {}
     if status is not None:
-        update_data["status_pesanan"] = status
+        update_data['status_pesanan'] = status
     if catatan is not None:
-        update_data["catatan"] = catatan
+        update_data['catatan'] = catatan
     if link_drive is not None:
-        update_data["link_google_drive"] = link_drive
-    if biaya_transportasi is not None:
-        update_data["biaya_transportasi_akomodasi"] = biaya_transportasi
+        update_data['link_google_drive'] = link_drive
+
+    update_data['biaya_tambah_hari'] = biaya_tambah_hari
+    update_data['biaya_lokasi'] = biaya_lokasi
+    update_data['biaya_transportasi_akomodasi'] = biaya_transportasi
+    update_data['total_harga'] = recalculated_total_harga
+    update_data['sisa_bayar'] = recalculated_sisa_bayar
 
     try:
-        db.pesanan.update_one({"_id": ObjectId(pesanan_id)}, {"$set": update_data})
+        db.pesanan.update_one({'_id': ObjectId(pesanan_id)}, {'$set': update_data})
         flash("Data pesanan berhasil diperbarui!", "success")
     except Exception as e:
         flash(f"Gagal memperbarui data pesanan: {e}", "danger")
 
-    return redirect(url_for("admin_pesanan"))
+    return redirect(url_for('admin_pesanan'))
+
+
+
 
 
 def kirim_email_pengingat(to, subject, body):
@@ -1600,20 +1587,19 @@ def kirim_email_pengingat(to, subject, body):
     except Exception as e:
         print(f"[ERROR] Gagal kirim email ke {to} | Error: {e}")
 
-
-@app.route("/admin_kirim_pengingat", methods=["POST"])
+@app.route('/admin_kirim_pengingat', methods=['POST'])
 def admin_kirim_pengingat():
-    email = request.form["email_klien"]
-    status = request.form["status_pesanan"]
-    nama = request.form["nama_klien"]
-    pesanan_id_for_redirect = request.form.get("pesanan_id_for_redirect")
+    email = request.form['email_klien']
+    status = request.form['status_pesanan']
+    nama = request.form['nama_klien']
+    pesanan_id_for_redirect = request.form.get('pesanan_id_for_redirect')
 
     # Format isi pesan
-    if status == "Belum Pemotretan":
+    if status == 'Belum Pemotretan':
         pesan = f"Halo {nama}, ini adalah pengingat untuk jadwal pemotretan Anda bersama Oval Photo."
-    elif status == "Sudah Pemotretan":
+    elif status == 'Sudah Pemotretan':
         pesan = f"Halo {nama}, mohon melakukan pelunasan pembayaran untuk layanan fotografi Oval Photo."
-    elif status == "Sudah Kirim File & Album":
+    elif status == 'Sudah Kirim File & Album':
         pesan = f"Halo {nama}, semoga Anda puas. Silakan beri ulasan mengenai layanan kami di Oval Photo :)"
     else:
         pesan = f"Halo {nama}, status pesanan Anda saat ini: {status}. Tidak ada pengingat spesifik."
@@ -1624,192 +1610,187 @@ def admin_kirim_pengingat():
     flash("Pengingat berhasil dikirim melalui Email resmi", "success")
 
     if pesanan_id_for_redirect:
-        return redirect(url_for("admin_pesanan", pesanan_id=pesanan_id_for_redirect))
+        return redirect(url_for('admin_pesanan', pesanan_id=pesanan_id_for_redirect))
     else:
-        return redirect(url_for("admin_pesanan"))
-
+        return redirect(url_for('admin_pesanan'))
 
 # User - Pemesanan (GET request - tampilan form)
-@app.route("/booking", methods=["GET"])
+@app.route('/booking', methods=['GET'])
+@login_required
 def booking():
-    paket_id = request.args.get("paket_id")
+    paket_id = request.args.get('paket_id')
 
     selected_paket_id = None
     selected_layanan_id = None
+    selected_layanan_nama = None
     selected_paket_nama = None
     selected_paket_harga_formatted = None
     selected_paket_deposit_formatted = None
     selected_paket_harga_raw = 0
     selected_paket_deposit_raw = 0
 
-    lokasi_list = list(db.lokasi.find({"is_active": True}))
+    lokasi_list = list(db.lokasi.find({'is_active': True}))
     for lokasi in lokasi_list:
-        lokasi["_id"] = str(lokasi["_id"])
+        lokasi['_id'] = str(lokasi['_id'])
+
+
+
+    disabled_statuses = ['Menunggu Konfirmasi', 'Telah Dikonfirmasi', 'Belum Pemotretan']
+
+    booked_dates_cursor = db.pesanan.find(
+        {'status_pesanan': {'$in': disabled_statuses}},
+        {'tanggal_mulai_acara': 1, 'tanggal_selesai_acara': 1, '_id': 0}
+    )
+
+    booked_date_ranges = []
+    for order in booked_dates_cursor:
+        start_date = order.get('tanggal_mulai_acara')
+        end_date = order.get('tanggal_selesai_acara')
+        if start_date and end_date:
+            booked_date_ranges.append({
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            })
+
+
 
     if paket_id:
         try:
-            paket_data = db.paket.find_one({"_id": ObjectId(paket_id)})
+            paket_data = db.paket.find_one({'_id': ObjectId(paket_id)})
             if paket_data:
-                selected_paket_id = str(paket_data["_id"])
-                selected_paket_nama = paket_data.get("nama")
-                harga = paket_data.get("harga")
-                deposit = paket_data.get("deposit")
-                layanan_id = paket_data.get("layanan_id")
+                selected_paket_id = str(paket_data['_id'])
+                selected_paket_nama = paket_data.get('nama')
+                harga = paket_data.get('harga')
+                deposit = paket_data.get('deposit')
+                layanan_id = paket_data.get('layanan_id')
 
                 if layanan_id:
                     selected_layanan_id = str(layanan_id)
+                    layanan_data = db.layanan.find_one({'_id': ObjectId(layanan_id)})
+                    if layanan_data:
+                        selected_layanan_nama = layanan_data.get('nama')
 
                 if harga is not None:
                     selected_paket_harga_raw = float(harga)
-                    selected_paket_harga_formatted = "{:,.0f}".format(
-                        selected_paket_harga_raw
-                    ).replace(",", ".")
+                    selected_paket_harga_formatted = "{:,.0f}".format(selected_paket_harga_raw).replace(',', '.')
                 if deposit is not None:
                     selected_paket_deposit_raw = float(deposit)
-                    selected_paket_deposit_formatted = "{:,.0f}".format(
-                        selected_paket_deposit_raw
-                    ).replace(",", ".")
+                    selected_paket_deposit_formatted = "{:,.0f}".format(selected_paket_deposit_raw).replace(',', '.')
             else:
                 flash(f"Paket dengan ID '{paket_id}' tidak ditemukan.", "danger")
-                return redirect(
-                    url_for("katalog_layanan")
-                )  # Redirect if package not found
+                return redirect(url_for('katalog_layanan')) # Redirect if package not found
         except Exception as e:
             print(f"Error fetching package data: {e}")
             flash("Terjadi kesalahan saat memuat detail paket.", "danger")
-            return redirect(url_for("katalog_layanan"))  # Or wherever appropriate
+            return redirect(url_for('katalog_layanan'))
 
-    return render_template(
-        "user/booking.html",
-        selected_paket_id=selected_paket_id,
-        selected_layanan_id=selected_layanan_id,
-        selected_paket_nama=selected_paket_nama,
-        selected_paket_harga=selected_paket_harga_formatted,
-        selected_paket_deposit=selected_paket_deposit_formatted,
-        selected_paket_harga_raw=selected_paket_harga_raw,
-        selected_paket_deposit_raw=selected_paket_deposit_raw,
-        lokasi_list=lokasi_list,
-    )
+    return render_template('user/booking.html',
+                           selected_paket_id=selected_paket_id,
+                           selected_layanan_id=selected_layanan_id,
+                           selected_layanan_nama=selected_layanan_nama,
+                           selected_paket_nama=selected_paket_nama,
+                           selected_paket_harga=selected_paket_harga_formatted,
+                           selected_paket_deposit=selected_paket_deposit_formatted,
+                           selected_paket_harga_raw=selected_paket_harga_raw,
+                           selected_paket_deposit_raw=selected_paket_deposit_raw,
+                           lokasi_list=lokasi_list,booked_date_ranges=booked_date_ranges)
 
 
 # User - Pemesanan (POST request - submit form)
-@app.route("/booking", methods=["POST"])
+@app.route('/booking', methods=['POST'])
 @login_required
 def submit_booking():
     try:
-        tanggal_pemesanan = request.form["tanggal_pemesanan"]
-        layanan_id = request.form["layanan_id"]  # From hidden input
-        paket_id = request.form["paket_id"]  # From hidden input
-        nama_klien = request.form["nama_klien"]
-        nama_orang_tua = request.form["nama_orang_tua"]
-        telepon_orang_tua = request.form["telepon_orang_tua"]
-        email_klien = request.form["email_klien"]
-        telepon_klien = request.form["telepon_klien"]
-        whatsapp_klien = request.form["whatsapp_klien"]
-        instagram_klien = request.form.get("instagram_klien", "")
-        facebook_klien = request.form.get("facebook_klien", "")
+        # Mendapatkan user_id dari sesi
+        user_id_pemesan = session.get('user_id')
+        if not user_id_pemesan:
+            flash("Sesi pengguna tidak valid. Silakan login ulang.", "danger")
+            return redirect(url_for('masuk'))
+        layanan_id = request.form['layanan_id']
+        paket_id = request.form['paket_id']
+        nama_klien = request.form['nama_klien']
+        nama_orang_tua = request.form['nama_orang_tua']
+        email_klien = request.form['email_klien'] # Email klien ini adalah email yang diisi di form, bukan email login
+        telepon_klien = request.form['telepon_klien']
+        instagram_klien = request.form.get('instagram_klien', '')
+        facebook_klien = request.form.get('facebook_klien', '')
 
-        jam_acara_str = request.form["jam_acara"]
-        tanggal_mulai_acara_str = request.form["tanggal_mulai_acara"]
-        tanggal_selesai_acara_str = request.form["tanggal_selesai_acara"]
+        jam_acara_str = request.form['jam_acara']
+        tanggal_mulai_acara_str = request.form['tanggal_mulai_acara']
+        tanggal_selesai_acara_str = request.form['tanggal_selesai_acara']
 
-        lokasi_luar_str = request.form["lokasi_luar"]
-        lokasi_luar = True if lokasi_luar_str == "iya" else False
+        lokasi_luar_str = request.form['lokasi_luar']
+        lokasi_luar = True if lokasi_luar_str == 'iya' else False
 
-        lokasi_pilihan_user = request.form.get("lokasi_id")
+        lokasi_pilihan_user = request.form.get('lokasi_id')
 
-        alamat_lokasi_manual = request.form.get("alamat_lokasi_manual", "")
-        link_maps_manual = request.form.get("link_maps_manual", "")
-
-        biaya_transportasi = float(request.form.get("biaya_transportasi", "0"))
+        alamat_lokasi_manual = request.form.get('alamat_lokasi_manual', '')
+        link_maps_manual = request.form.get('link_maps_manual', '')
 
         # Konversi tanggal dan waktu
         jam_acara = jam_acara_str
-        tanggal_mulai_acara = datetime.strptime(tanggal_mulai_acara_str, "%Y-%m-%d")
-        tanggal_selesai_acara = datetime.strptime(tanggal_selesai_acara_str, "%Y-%m-%d")
+        tanggal_mulai_acara = datetime.strptime(tanggal_mulai_acara_str, '%Y-%m-%d')
+        tanggal_selesai_acara = datetime.strptime(tanggal_selesai_acara_str, '%Y-%m-%d')
 
         # Get harga paket dan deposit dari form (hidden fields)
-        harga_paket = float(request.form.get("harga_paket_dasar", "0"))
-        deposit_paket = float(request.form.get("deposit_paket_dasar", "0"))
+        harga_paket = float(request.form.get('harga_paket_dasar', '0'))
+        deposit_paket = float(request.form.get('deposit_paket_dasar', '0'))
 
-        # Calculate Biaya Tambah Hari
-        diff_days = (tanggal_selesai_acara - tanggal_mulai_acara).days
-        biaya_tambahan_hari = 0
-        if diff_days > 0:  # Only charge for additional days beyond the first
-            biaya_tambahan_hari = diff_days * ADDITIONAL_DAY_COST_PER_DAY
 
-        # Determine Lokasi details and cost
-        biaya_lokasi = 0
+        biaya_transportasi = int(0)  
+        biaya_tambah_hari = int(0) 
+        biaya_lokasi = int(0) 
+
+
         alamat_lokasi_final = None
         link_maps_final = None
         lokasi_id_db = None
 
         if lokasi_pilihan_user == "pilih_lokasi_sendiri":
-            biaya_lokasi = 0  # No additional cost for custom location
             alamat_lokasi_final = alamat_lokasi_manual
             link_maps_final = link_maps_manual
         elif lokasi_pilihan_user:
-            selected_lokasi = db.lokasi.find_one({"_id": ObjectId(lokasi_pilihan_user)})
+            selected_lokasi = db.lokasi.find_one({'_id': ObjectId(lokasi_pilihan_user)})
             if selected_lokasi:
-                biaya_lokasi = selected_lokasi.get("biaya", 0)
-                alamat_lokasi_final = selected_lokasi.get("alamat")
-                link_maps_final = selected_lokasi.get("link_maps")
+                alamat_lokasi_final = selected_lokasi.get('alamat')
+                link_maps_final = selected_lokasi.get('link_maps')
                 lokasi_id_db = ObjectId(lokasi_pilihan_user)
-        else:  # If no location is selected (e.g., optional field but client left it blank)
-            biaya_lokasi = 0
+        else:
             alamat_lokasi_final = ""
             link_maps_final = ""
 
-        # Recalculate Total Harga and Sisa Bayar on backend
-        recalculated_total_harga = (
-            harga_paket + biaya_tambahan_hari + biaya_lokasi + biaya_transportasi
-        )
+        recalculated_total_harga = harga_paket + biaya_tambah_hari + biaya_lokasi + biaya_transportasi
         recalculated_sisa_bayar = recalculated_total_harga - deposit_paket
-
-        # Handle upload Surat Izin Lokasi (Opsional)
-        surat_izin_lokasi_filename = None
-        if "surat_izin_lokasi" in request.files:
-            surat_izin_file = request.files["surat_izin_lokasi"]
-            if surat_izin_file and surat_izin_file.filename != "":
-                filename_ext = os.path.splitext(surat_izin_file.filename)
-                # Use sanitized client name for filename
-                unique_filename = f"{sanitize_filename(nama_klien)}_surat_izin_{int(time.time())}{filename_ext[1]}"
-                file_path = os.path.join(
-                    app.config["UPLOAD_FOLDER_SURAT_IZIN"], unique_filename
-                )
-                surat_izin_file.save(file_path)
-                surat_izin_lokasi_filename = unique_filename
 
         # Buat dokumen pesanan
         pesanan_doc = {
-            "tanggal_pemesanan": tanggal_pemesanan,
-            "layanan_id": ObjectId(layanan_id),
-            "paket_id": ObjectId(paket_id),
-            "nama_klien": nama_klien,
-            "nama_orang_tua": nama_orang_tua,
-            "telepon_orang_tua": telepon_orang_tua,
-            "email_klien": email_klien,
-            "telepon_klien": telepon_klien,
-            "whatsapp_klien": whatsapp_klien,
-            "instagram_klien": instagram_klien,
-            "facebook_klien": facebook_klien,
-            "jam_acara": jam_acara,
-            "tanggal_mulai_acara": tanggal_mulai_acara,  # Store as datetime object
-            "tanggal_selesai_acara": tanggal_selesai_acara,  # Store as datetime object
-            "lokasi_luar_labuhanbatu": lokasi_luar,
-            "lokasi_id": lokasi_id_db,  # Will be ObjectId if chosen from list, None if custom
-            "alamat_lokasi_acara": alamat_lokasi_final,
-            "link_maps_acara": link_maps_final,
-            "surat_izin_lokasi": surat_izin_lokasi_filename,
-            "biaya_transportasi_akomodasi": biaya_transportasi,  # Currently 0, admin updates this
-            "biaya_tambahan_hari": biaya_tambahan_hari,
-            "biaya_lokasi": biaya_lokasi,
-            "harga_paket": harga_paket,  # Store base package price from form
-            "deposit": deposit_paket,  # Store base deposit from form
-            "total_harga": recalculated_total_harga,  # Store calculated total
-            "sisa_bayar": recalculated_sisa_bayar,  # Store calculated remaining payment
-            "status_pesanan": "Menunggu Konfirmasi",
-            "created_at": datetime.utcnow(),
+            'user_id_pemesan': ObjectId(user_id_pemesan), # <-- Tambahkan ini!
+            'tanggal_pemesanan': datetime.utcnow(),
+            'layanan_id': ObjectId(layanan_id),
+            'paket_id': ObjectId(paket_id),
+            'nama_klien': nama_klien,
+            'nama_orang_tua': nama_orang_tua,
+            'email_klien': email_klien,
+            'telepon_klien': telepon_klien,
+            'instagram_klien': instagram_klien,
+            'facebook_klien': facebook_klien,
+            'jam_acara': jam_acara,
+            'tanggal_mulai_acara': tanggal_mulai_acara,
+            'tanggal_selesai_acara': tanggal_selesai_acara,
+            'lokasi_luar_labuhanbatu': lokasi_luar,
+            'lokasi_id': lokasi_id_db,
+            'alamat_lokasi_acara': alamat_lokasi_final,
+            'link_maps_acara': link_maps_final,
+            'surat_izin_lokasi': 'Tidak ada file',
+            'biaya_transportasi_akomodasi': biaya_transportasi,
+            'biaya_tambah_hari': biaya_tambah_hari,
+            'biaya_lokasi':  biaya_lokasi,
+            'harga_paket': harga_paket,
+            'deposit': deposit_paket,
+            'total_harga': recalculated_total_harga, 
+            'sisa_bayar': recalculated_sisa_bayar,
+            'status_pesanan': 'Menunggu Konfirmasi',
+            'created_at': datetime.utcnow()
         }
 
         db.pesanan.insert_one(pesanan_doc)
@@ -1819,82 +1800,363 @@ def submit_booking():
     except Exception as e:
         print(f"Error adding order: {e}")
         flash(f"Terjadi kesalahan saat menambahkan pesanan: {e}", "danger")
+        return redirect(url_for('booking', paket_id=request.form.get('paket_id')))
+ 
+@app.route('/booking_ubah/<_id>', methods=['GET', 'POST'])
+def booking_ubah():
+    try:
+        # Mendapatkan user_id dari sesi
+        user_id_pemesan = session.get('user_id')
+        if not user_id_pemesan:
+            flash("Sesi pengguna tidak valid. Silakan login ulang.", "danger")
+            return redirect(url_for('masuk'))
+        layanan_id = request.form['layanan_id']
+        paket_id = request.form['paket_id']
+        nama_klien = request.form['nama_klien']
+        nama_orang_tua = request.form['nama_orang_tua']
+        email_klien = request.form['email_klien'] # Email klien ini adalah email yang diisi di form, bukan email login
+        telepon_klien = request.form['telepon_klien']
+        instagram_klien = request.form.get('instagram_klien', '')
+        facebook_klien = request.form.get('facebook_klien', '')
 
-        return redirect(url_for("booking", paket_id=request.form.get("paket_id")))
+        jam_acara_str = request.form['jam_acara']
+        tanggal_mulai_acara_str = request.form['tanggal_mulai_acara']
+        tanggal_selesai_acara_str = request.form['tanggal_selesai_acara']
+
+        lokasi_luar_str = request.form['lokasi_luar']
+        lokasi_luar = True if lokasi_luar_str == 'iya' else False
+
+        lokasi_pilihan_user = request.form.get('lokasi_id')
+
+        alamat_lokasi_manual = request.form.get('alamat_lokasi_manual', '')
+        link_maps_manual = request.form.get('link_maps_manual', '')
+
+        # Konversi tanggal dan waktu
+        jam_acara = jam_acara_str
+        tanggal_mulai_acara = datetime.strptime(tanggal_mulai_acara_str, '%Y-%m-%d')
+        tanggal_selesai_acara = datetime.strptime(tanggal_selesai_acara_str, '%Y-%m-%d')
+
+        # Get harga paket dan deposit dari form (hidden fields)
+        harga_paket = float(request.form.get('harga_paket_dasar', '0'))
+        deposit_paket = float(request.form.get('deposit_paket_dasar', '0'))
+
+
+        biaya_transportasi = int(0)  
+        biaya_tambah_hari = int(0) 
+        biaya_lokasi = int(0) 
+
+
+        alamat_lokasi_final = None
+        link_maps_final = None
+        lokasi_id_db = None
+
+        if lokasi_pilihan_user == "pilih_lokasi_sendiri":
+            alamat_lokasi_final = alamat_lokasi_manual
+            link_maps_final = link_maps_manual
+        elif lokasi_pilihan_user:
+            selected_lokasi = db.lokasi.find_one({'_id': ObjectId(lokasi_pilihan_user)})
+            if selected_lokasi:
+                alamat_lokasi_final = selected_lokasi.get('alamat')
+                link_maps_final = selected_lokasi.get('link_maps')
+                lokasi_id_db = ObjectId(lokasi_pilihan_user)
+        else:
+            alamat_lokasi_final = ""
+            link_maps_final = ""
+
+        recalculated_total_harga = harga_paket + biaya_tambah_hari + biaya_lokasi + biaya_transportasi
+        recalculated_sisa_bayar = recalculated_total_harga - deposit_paket
+
+        # Buat dokumen pesanan
+        pesanan_doc = {
+            'user_id_pemesan': ObjectId(user_id_pemesan), # <-- Tambahkan ini!
+            'tanggal_pemesanan': datetime.utcnow(),
+            'layanan_id': ObjectId(layanan_id),
+            'paket_id': ObjectId(paket_id),
+            'nama_klien': nama_klien,
+            'nama_orang_tua': nama_orang_tua,
+            'email_klien': email_klien,
+            'telepon_klien': telepon_klien,
+            'instagram_klien': instagram_klien,
+            'facebook_klien': facebook_klien,
+            'jam_acara': jam_acara,
+            'tanggal_mulai_acara': tanggal_mulai_acara,
+            'tanggal_selesai_acara': tanggal_selesai_acara,
+            'lokasi_luar_labuhanbatu': lokasi_luar,
+            'lokasi_id': lokasi_id_db,
+            'alamat_lokasi_acara': alamat_lokasi_final,
+            'link_maps_acara': link_maps_final,
+            'surat_izin_lokasi': 'Tidak ada file',
+            'biaya_transportasi_akomodasi': biaya_transportasi,
+            'biaya_tambah_hari': biaya_tambah_hari,
+            'biaya_lokasi':  biaya_lokasi,
+            'harga_paket': harga_paket,
+            'deposit': deposit_paket,
+            'total_harga': recalculated_total_harga, 
+            'sisa_bayar': recalculated_sisa_bayar,
+            'status_pesanan': 'Menunggu Konfirmasi',
+            'created_at': datetime.utcnow()
+        }
+
+        db.pesanan.update_one(pesanan_doc)
+        flash("Pesanan berhasil dibuat!", "success")
+        return redirect(url_for("ripe_menunggu_konfirmasi"))
+
+    except Exception as e:
+        print(f"Error adding order: {e}")
+        flash(f"Terjadi kesalahan saat menambahkan pesanan: {e}", "danger")
+        return redirect(url_for('booking_ubah', paket_id=request.form.get('paket_id')))
 
 
 # User - Menunggu Konfirmasi (GET request)
-@app.route("/ripe_menunggu_konfirmasi")
+@app.route('/ripe_menunggu_konfirmasi')
 @login_required
 def ripe_menunggu_konfirmasi():
-    all_pesanan_list = []
-    try:
-        # Ambil semua pesanan dari database
-        pesanan_cursor = db.pesanan.find().sort(
-            "created_at", -1
-        )  # Urutkan dari yang terbaru
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Anda harus login untuk melihat riwayat pemesanan.", "warning")
+        return redirect(url_for('masuk'))
 
-        # Buat map nama layanan, paket, dan lokasi berdasarkan _id
-        layanan_map = {str(l["_id"]): l["nama"] for l in db.layanan.find()}
-        paket_map = {str(l["_id"]): l["nama"] for l in db.paket.find()}
-        lokasi_map = {str(l["_id"]): l["nama"] for l in db.lokasi.find()}
+    pesanan_user_list = []
+    try:
+        # Filter pesanan berdasarkan user_id_pemesan yang tersimpan saat booking
+        pesanan_cursor = db.pesanan.find({"user_id_pemesan": ObjectId(user_id)}).sort('created_at', -1)
+
+        layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
+        paket_map = {str(l['_id']): l['nama'] for l in db.paket.find()}
+        lokasi_map = {str(l['_id']): l['nama'] for l in db.lokasi.find()}
 
         for pesanan in pesanan_cursor:
-            # Konversi ObjectId pesanan ke string
-            pesanan["_id"] = str(pesanan["_id"])
+            pesanan['_id'] = str(pesanan['_id'])
+            layanan_id = str(pesanan.get('layanan_id', ''))
+            pesanan['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
 
-            # Layanan
-            layanan_id = str(pesanan.get("layanan_id", ""))
-            pesanan["layanan"] = layanan_map.get(layanan_id, "Tidak ditemukan")
+            paket_id = str(pesanan.get('paket_id', ''))
+            pesanan['paket'] = paket_map.get(paket_id, 'Tidak ditemukan')
 
-            # Paket
-            paket_id = str(pesanan.get("paket_id", ""))
-            pesanan["paket"] = paket_map.get(paket_id, "Tidak ditemukan")
-
-            # Lokasi (bisa None atau kosong jika input manual)
-            lokasi_id = str(pesanan.get("lokasi_id", ""))
+            lokasi_id = str(pesanan.get('lokasi_id', ''))
             if lokasi_id and lokasi_id != "None":
-                pesanan["lokasi"] = lokasi_map.get(lokasi_id, "Tidak ditemukan")
+                pesanan['lokasi'] = lokasi_map.get(lokasi_id, 'Tidak ditemukan')
             else:
-                pesanan["lokasi"] = (
-                    "Lokasi pilihan sendiri"
-                    if pesanan.get("alamat_lokasi_acara")
-                    else "Tidak tersedia"
-                )
+                pesanan['lokasi'] = 'Lokasi pilihan sendiri' if pesanan.get('alamat_lokasi_acara') else 'Tidak tersedia'
 
-            # Format tanggal
-            if isinstance(pesanan.get("tanggal_mulai_acara"), datetime):
-                pesanan["tanggal_mulai_acara_formatted"] = tanggal_id(
-                    pesanan["tanggal_mulai_acara"]
-                )
+            if isinstance(pesanan.get('tanggal_mulai_acara'), datetime):
+                pesanan['tanggal_mulai_acara_formatted'] = tanggal_id(pesanan['tanggal_mulai_acara'])
             else:
-                pesanan["tanggal_mulai_acara_formatted"] = (
-                    "N/A"  # Fallback for missing or invalid date
-                )
-            if isinstance(pesanan.get("tanggal_selesai_acara"), datetime):
-                pesanan["tanggal_selesai_acara_formatted"] = tanggal_id(
-                    pesanan["tanggal_selesai_acara"]
-                )
+                pesanan['tanggal_mulai_acara_formatted'] = 'N/A'
+            if isinstance(pesanan.get('tanggal_selesai_acara'), datetime):
+                pesanan['tanggal_selesai_acara_formatted'] = tanggal_id(pesanan['tanggal_selesai_acara'])
             else:
-                pesanan["tanggal_selesai_acara_formatted"] = (
-                    "N/A"  # Fallback for missing or invalid date
-                )
+                pesanan['tanggal_selesai_acara_formatted'] = 'N/A'
 
-            all_pesanan_list.append(pesanan)
+            # Add formatted creation date for display
+            if isinstance(pesanan.get('created_at'), datetime):
+                pesanan['created_at_formatted'] = pesanan['created_at'].strftime('%d %b %Y %H:%M')
+            else:
+                pesanan['created_at_formatted'] = 'N/A'
 
-        return render_template(
-            "user/ripe_menunggu_konfirmasi.html",
-            pesanan=all_pesanan_list,
-            current_route=request.path,
-        )
+            pesanan_user_list.append(pesanan)
+
+        return render_template('user/ripe_menunggu_konfirmasi.html', pesanan=pesanan_user_list, current_route=request.path)
 
     except Exception as e:
-        flash(f"Terjadi kesalahan saat mengambil data jadwal: {e}", "danger")
-        # Jika terjadi kesalahan, Anda bisa me-render template dengan daftar kosong
-        # atau redirect ke halaman dashboard admin.
-        return render_template(
-            "user/ripe_menunggu_konfirmasi.html", pesanan=[], current_route=request.path
-        )
+        flash(f"Terjadi kesalahan saat mengambil riwayat pemesanan Anda: {e}", "danger")
+        return render_template('user/ripe_menunggu_konfirmasi.html', pesanan=[], current_route=request.path)
+
+
+
+
+# User - Telah Dikonfirmasi (GET request)
+@app.route('/riwayat_pemesanan')
+@login_required
+def riwayat_pemesanan():
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Anda harus login untuk melihat riwayat pemesanan.", "warning")
+        return redirect(url_for('masuk'))
+
+    pesanan_user_list = []
+    try:
+        # Filter pesanan berdasarkan user_id_pemesan yang tersimpan saat booking
+        pesanan_cursor = db.pesanan.find({"user_id_pemesan": ObjectId(user_id)}).sort('created_at', -1)
+
+        layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
+        paket_map = {str(l['_id']): l['nama'] for l in db.paket.find()}
+        lokasi_map = {str(l['_id']): l['nama'] for l in db.lokasi.find()}
+
+        for pesanan in pesanan_cursor:
+            pesanan['_id'] = str(pesanan['_id'])
+            layanan_id = str(pesanan.get('layanan_id', ''))
+            pesanan['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
+
+            paket_id = str(pesanan.get('paket_id', ''))
+            pesanan['paket'] = paket_map.get(paket_id, 'Tidak ditemukan')
+
+            lokasi_id = str(pesanan.get('lokasi_id', ''))
+            if lokasi_id and lokasi_id != "None":
+                pesanan['lokasi'] = lokasi_map.get(lokasi_id, 'Tidak ditemukan')
+            else:
+                pesanan['lokasi'] = 'Lokasi pilihan sendiri' if pesanan.get('alamat_lokasi_acara') else 'Tidak tersedia'
+
+            if isinstance(pesanan.get('tanggal_mulai_acara'), datetime):
+                pesanan['tanggal_mulai_acara_formatted'] = tanggal_id(pesanan['tanggal_mulai_acara'])
+            else:
+                pesanan['tanggal_mulai_acara_formatted'] = 'N/A'
+            if isinstance(pesanan.get('tanggal_selesai_acara'), datetime):
+                pesanan['tanggal_selesai_acara_formatted'] = tanggal_id(pesanan['tanggal_selesai_acara'])
+            else:
+                pesanan['tanggal_selesai_acara_formatted'] = 'N/A'
+
+            # Add formatted creation date for display
+            if isinstance(pesanan.get('created_at'), datetime):
+                pesanan['created_at_formatted'] = pesanan['created_at'].strftime('%d %b %Y %H:%M')
+            else:
+                pesanan['created_at_formatted'] = 'N/A'
+
+            pesanan_user_list.append(pesanan)
+
+        return render_template('user/riwayat_pemesanan.html', pesanan=pesanan_user_list, current_route=request.path)
+
+    except Exception as e:
+        flash(f"Terjadi kesalahan saat mengambil riwayat pemesanan Anda: {e}", "danger")
+        return render_template('user/riwayat_pemesanan.html', pesanan=[], current_route=request.path)
+
+
+
+
+
+# User - Diproses (GET request)
+@app.route('/ripe_diproses')
+@login_required
+def ripe_diproses():
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Anda harus login untuk melihat riwayat pemesanan.", "warning")
+        return redirect(url_for('masuk'))
+
+    pesanan_user_list = []
+    try:
+        # Filter pesanan berdasarkan user_id_pemesan yang tersimpan saat booking
+        pesanan_cursor = db.pesanan.find({"user_id_pemesan": ObjectId(user_id)}).sort('created_at', -1)
+
+        layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
+        paket_map = {str(l['_id']): l['nama'] for l in db.paket.find()}
+        lokasi_map = {str(l['_id']): l['nama'] for l in db.lokasi.find()}
+
+        for pesanan in pesanan_cursor:
+            pesanan['_id'] = str(pesanan['_id'])
+            layanan_id = str(pesanan.get('layanan_id', ''))
+            pesanan['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
+
+            paket_id = str(pesanan.get('paket_id', ''))
+            pesanan['paket'] = paket_map.get(paket_id, 'Tidak ditemukan')
+
+            lokasi_id = str(pesanan.get('lokasi_id', ''))
+            if lokasi_id and lokasi_id != "None":
+                pesanan['lokasi'] = lokasi_map.get(lokasi_id, 'Tidak ditemukan')
+            else:
+                pesanan['lokasi'] = 'Lokasi pilihan sendiri' if pesanan.get('alamat_lokasi_acara') else 'Tidak tersedia'
+
+            if isinstance(pesanan.get('tanggal_mulai_acara'), datetime):
+                pesanan['tanggal_mulai_acara_formatted'] = tanggal_id(pesanan['tanggal_mulai_acara'])
+            else:
+                pesanan['tanggal_mulai_acara_formatted'] = 'N/A'
+            if isinstance(pesanan.get('tanggal_selesai_acara'), datetime):
+                pesanan['tanggal_selesai_acara_formatted'] = tanggal_id(pesanan['tanggal_selesai_acara'])
+            else:
+                pesanan['tanggal_selesai_acara_formatted'] = 'N/A'
+
+            # Add formatted creation date for display
+            if isinstance(pesanan.get('created_at'), datetime):
+                pesanan['created_at_formatted'] = pesanan['created_at'].strftime('%d %b %Y %H:%M')
+            else:
+                pesanan['created_at_formatted'] = 'N/A'
+
+            pesanan_user_list.append(pesanan)
+
+        return render_template('user/ripe_diproses.html', pesanan=pesanan_user_list, current_route=request.path)
+
+    except Exception as e:
+        flash(f"Terjadi kesalahan saat mengambil riwayat pemesanan Anda: {e}", "danger")
+        return render_template('user/ripe_diproses.html', pesanan=[], current_route=request.path)
+
+
+# User - Selesai (GET request)
+@app.route('/ripe_selesai')
+@login_required
+def ripe_selesai():
+    user_id = session.get('user_id')
+    if not user_id:
+        flash("Anda harus login untuk melihat riwayat pemesanan.", "warning")
+        return redirect(url_for('masuk'))
+
+    pesanan_user_list = []
+    try:
+        # Filter pesanan berdasarkan user_id_pemesan yang tersimpan saat booking
+        pesanan_cursor = db.pesanan.find({"user_id_pemesan": ObjectId(user_id)}).sort('created_at', -1)
+
+        layanan_map = {str(l['_id']): l['nama'] for l in db.layanan.find()}
+        paket_map = {str(l['_id']): l['nama'] for l in db.paket.find()}
+        lokasi_map = {str(l['_id']): l['nama'] for l in db.lokasi.find()}
+
+        for pesanan in pesanan_cursor:
+            pesanan['_id'] = str(pesanan['_id'])
+            layanan_id = str(pesanan.get('layanan_id', ''))
+            pesanan['layanan'] = layanan_map.get(layanan_id, 'Tidak ditemukan')
+
+            paket_id = str(pesanan.get('paket_id', ''))
+            pesanan['paket'] = paket_map.get(paket_id, 'Tidak ditemukan')
+
+            lokasi_id = str(pesanan.get('lokasi_id', ''))
+            if lokasi_id and lokasi_id != "None":
+                pesanan['lokasi'] = lokasi_map.get(lokasi_id, 'Tidak ditemukan')
+            else:
+                pesanan['lokasi'] = 'Lokasi pilihan sendiri' if pesanan.get('alamat_lokasi_acara') else 'Tidak tersedia'
+
+            if isinstance(pesanan.get('tanggal_mulai_acara'), datetime):
+                pesanan['tanggal_mulai_acara_formatted'] = tanggal_id(pesanan['tanggal_mulai_acara'])
+            else:
+                pesanan['tanggal_mulai_acara_formatted'] = 'N/A'
+            if isinstance(pesanan.get('tanggal_selesai_acara'), datetime):
+                pesanan['tanggal_selesai_acara_formatted'] = tanggal_id(pesanan['tanggal_selesai_acara'])
+            else:
+                pesanan['tanggal_selesai_acara_formatted'] = 'N/A'
+
+            # Add formatted creation date for display
+            if isinstance(pesanan.get('created_at'), datetime):
+                pesanan['created_at_formatted'] = pesanan['created_at'].strftime('%d %b %Y %H:%M')
+            else:
+                pesanan['created_at_formatted'] = 'N/A'
+
+            pesanan_user_list.append(pesanan)
+
+        return render_template('user/ripe_selesai.html', pesanan=pesanan_user_list, current_route=request.path)
+
+    except Exception as e:
+        flash(f"Terjadi kesalahan saat mengambil riwayat pemesanan Anda: {e}", "danger")
+        return render_template('user/ripe_selesai.html', pesanan=[], current_route=request.path)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # Admin - Tim Fotografi
@@ -2273,9 +2535,6 @@ def ulasan():
     return render_template("user/ulasan.html")
 
 
-@app.route("/riwayat_pemesanan")
-def riwayat_pemesanan():
-    return render_template("user/riwayat_pemesanan.html")
 
 
 @app.route("/kontak")
@@ -2985,21 +3244,304 @@ def admin_akunKlien():
     )
 
 
-@app.route("/ripe_diproses")
-@login_required
-def ripe_diproses():
-    return render_template("user/ripe_diproses.html")
 
-
-@app.route("/ripe_selesai")
-@login_required
-def ripe_selesai():
-    return render_template("user/ripe_selesai.html")
 
 
 @app.route("/formulasan")
 def formulasan():
     return render_template("user/ulasan_form.html")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@app.template_filter('rupiah')
+def rupiah_format(value):
+    try:
+        value = float(value)
+        return "Rp {:,.0f}".format(value).replace(',', '.')
+    except (ValueError, TypeError):
+        return value
+    
+
+
+
+
+
+
+
+
+
+# --- Midtrans Configuration ---
+MIDTRANS_SERVER_KEY = os.environ.get('MIDTRANS_SERVER_KEY', 'SB-Mid-server-rEpxd94AnaenmjNsX2qKrqMi')
+MIDTRANS_CLIENT_KEY = os.environ.get('MIDTRANS_CLIENT_KEY', 'SB-Mid-client-JTsOBVyXkQtff82K')
+MIDTRANS_IS_PRODUCTION = os.environ.get('MIDTRANS_IS_PRODUCTION', 'false').lower() == 'true' # Set True untuk sandbox, False untuk produksi
+
+#  Inisialisasi Snap API untuk membuat transaksi Snap
+snap_api = midtransclient.Snap(
+    is_production=MIDTRANS_IS_PRODUCTION,
+    server_key=MIDTRANS_SERVER_KEY
+)
+
+core_api_for_status = midtransclient.CoreApi(
+    is_production=MIDTRANS_IS_PRODUCTION,
+    server_key=MIDTRANS_SERVER_KEY
+)
+
+
+@app.route('/api/create_midtrans_transaction', methods=['POST'])
+@login_required
+def create_midtrans_transaction():
+    try:
+        data = request.get_json()
+        pesanan_id = data.get('pesanan_id')
+        payment_type = data.get('payment_type') # 'deposit' or 'pelunasan'
+
+        if not pesanan_id or not payment_type:
+            return jsonify({'success': False, 'message': 'ID Pesanan dan tipe pembayaran diperlukan.'}), 400
+
+        pesanan = db.pesanan.find_one({'_id': ObjectId(pesanan_id)})
+        if not pesanan:
+            return jsonify({'success': False, 'message': 'Pesanan tidak ditemukan.'}), 404
+
+        # Pastikan user yang login adalah pemilik pesanan
+        if str(pesanan.get('user_id_pemesan')) != session.get('user_id'):
+            return jsonify({'success': False, 'message': 'Anda tidak memiliki akses ke pesanan ini.'}), 403
+
+        amount = 0
+        transaction_details = {}
+        item_details = []
+        order_id_prefix = ""
+
+        if payment_type == 'deposit':
+            amount = pesanan.get('deposit', 0)
+            order_id_prefix = "DEPOSIT-"
+            item_details.append({
+                "id": f"DEP-{pesanan_id}",
+                "price": int(amount),
+                "quantity": 1,
+                "name": f"Pembayaran Deposit Layanan {pesanan.get('layanan')} ({pesanan.get('paket')})"
+            })
+        elif payment_type == 'pelunasan':
+            amount = pesanan.get('total_harga', 0)
+            order_id_prefix = "LUNAS-"
+            item_details.append({
+                "id": f"LUN-{pesanan_id}",
+                "price": int(amount),
+                "quantity": 1,
+                "name": f"Pembayaran Pelunasan Layanan {pesanan.get('layanan')} ({pesanan.get('paket')})"
+            })
+        else:
+            return jsonify({'success': False, 'message': 'Tipe pembayaran tidak valid.'}), 400
+
+        if amount <= 0:
+            return jsonify({'success': False, 'message': 'Jumlah pembayaran harus lebih dari nol.'}), 400
+
+        # Buat order_id unik untuk setiap transaksi Midtrans
+        # Gunakan kombinasi order_id dan timestamp untuk memastikan keunikan
+        order_id = f"{order_id_prefix}{pesanan_id}-{int(datetime.now().timestamp())}"
+
+        transaction_details = {
+            "order_id": order_id,
+            "gross_amount": int(amount)
+        }
+
+        # Data pelanggan dari pesanan
+        customer_details = {
+            "first_name": pesanan.get('nama_klien', 'Client'),
+            "email": pesanan.get('email_klien', 'no-email@example.com'),
+            "phone": pesanan.get('telepon_klien', '08123456789')
+        }
+
+        params = {
+            "transaction_details": transaction_details,
+            "item_details": item_details,
+            "customer_details": customer_details,
+            "callbacks": {
+                "finish": url_for('midtrans_payment_finish', _external=True) # URL setelah pembayaran selesai (redirect user)
+            }
+        }
+
+        # Simpan order_id Midtrans ke dalam dokumen pesanan di MongoDB
+        # Ini penting untuk melacak pembayaran yang masuk melalui webhook
+        if payment_type == 'deposit':
+            db.pesanan.update_one(
+                {'_id': ObjectId(pesanan_id)},
+                {'$set': {
+                    'midtrans_deposit_order_id': order_id,
+                    'last_deposit_attempt_amount': amount,
+                    'last_deposit_attempt_time': datetime.utcnow()
+                }}
+            )
+        elif payment_type == 'pelunasan':
+            db.pesanan.update_one(
+                {'_id': ObjectId(pesanan_id)},
+                {'$set': {
+                    'midtrans_pelunasan_order_id': order_id,
+                    'last_pelunasan_attempt_amount': amount,
+                    'last_pelunasan_attempt_time': datetime.utcnow()
+                }}
+            )
+
+        snap_response = snap_api.create_transaction(params)
+        return jsonify({'success': True, 'token': snap_response['token']}), 200
+
+    except Exception as e:
+        app.logger.error(f"Error creating Midtrans transaction: {e}", exc_info=True)
+        return jsonify({'success': False, 'message': f'Gagal membuat transaksi Midtrans: {str(e)}'}), 500
+
+
+@app.route('/midtrans_notification', methods=['POST'])
+def midtrans_notification():
+    try:
+        notification_data = request.get_json()
+        app.logger.info(f"Midtrans Notification Received: {notification_data}")
+
+        # Verifikasi notifikasi menggunakan server key Midtrans
+        status_response = core_api_for_status.transaction.status(notification_data['transaction_id'])
+        app.logger.info(f"Midtrans Transaction Status Response: {status_response}")
+
+        order_id = status_response['order_id']
+        transaction_status = status_response['transaction_status']
+        fraud_status = status_response.get('fraud_status')
+        gross_amount_midtrans = float(status_response['gross_amount']) # Jumlah dari Midtrans
+
+        # Tentukan apakah ini pembayaran deposit atau pelunasan
+        is_deposit_payment = order_id.startswith("DEPOSIT-")
+        is_pelunasan_payment = order_id.startswith("LUNAS-")
+
+        pesanan_id_from_order_id = order_id.split('-')[1] # Extract pesanan_id from order_id
+
+        pesanan = db.pesanan.find_one({'_id': ObjectId(pesanan_id_from_order_id)})
+        if not pesanan:
+            app.logger.warning(f"Pesanan dengan ID {pesanan_id_from_order_id} tidak ditemukan untuk notifikasi Midtrans Order ID: {order_id}")
+            return "Pesanan tidak ditemukan", 404
+
+        # Cek kesesuaian order_id Midtrans dengan yang tersimpan di DB
+        expected_midtrans_order_id = ""
+        expected_amount = 0
+
+        if is_deposit_payment:
+            expected_midtrans_order_id = pesanan.get('midtrans_deposit_order_id')
+            expected_amount = pesanan.get('deposit', 0)
+        elif is_pelunasan_payment:
+            expected_midtrans_order_id = pesanan.get('midtrans_pelunasan_order_id')
+            expected_amount = pesanan.get('total_harga', 0)
+
+        if expected_midtrans_order_id != order_id:
+            app.logger.warning(f"Midtrans Order ID mismatch. Expected: {expected_midtrans_order_id}, Got: {order_id}")
+            return "Order ID mismatch", 400
+
+        # Verifikasi jumlah pembayaran
+        if gross_amount_midtrans != expected_amount:
+            app.logger.warning(f"Amount mismatch for Order ID {order_id}. Expected: {expected_amount}, Got: {gross_amount_midtrans}")
+            pass
+
+
+        # Logika pembaruan status pesanan berdasarkan status transaksi Midtrans
+        if transaction_status == 'capture':
+            if fraud_status == 'challenge':
+                update_status = 'Pending (Challenge)'
+            elif fraud_status == 'accept':
+                if is_deposit_payment:
+                    update_status = 'Belum Pemotretan' # status menjadi 'Belum Pemotretan' setelah deposit berhasil
+                    # Tambahkan flag bahwa deposit sudah dibayar
+                    db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {
+                        'status_pembayaran_deposit': 'Lunas',
+                        'tanggal_pembayaran_deposit': datetime.utcnow(),
+                        'midtrans_deposit_status': 'capture'
+                    }})
+                elif is_pelunasan_payment:
+                    update_status = 'Belum Pemotretan' 
+                    # Tambahkan flag bahwa pelunasan sudah dibayar
+                    db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {
+                        'status_pembayaran_pelunasan': 'Lunas',
+                        'tanggal_pembayaran_pelunasan': datetime.utcnow(),
+                        'midtrans_pelunasan_status': 'capture'
+                    }})
+                
+                # Update status utama pesanan jika diperlukan
+                db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+
+        elif transaction_status == 'settlement':
+            # Untuk GoPay, ShopeePay, dsb., status bisa langsung settlement
+            if is_deposit_payment:
+                update_status = 'Belum Pemotretan'
+                db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {
+                    'status_pembayaran_deposit': 'Lunas',
+                    'tanggal_pembayaran_deposit': datetime.utcnow(),
+                    'midtrans_deposit_status': 'settlement'
+                }})
+            elif is_pelunasan_payment:
+                update_status = 'Belum Pemotretan'
+                db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {
+                    'status_pembayaran_pelunasan': 'Lunas',
+                    'tanggal_pembayaran_pelunasan': datetime.utcnow(),
+                    'midtrans_pelunasan_status': 'settlement'
+                }})
+            
+            db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+
+        elif transaction_status == 'pending':
+            update_status = 'Pending Pembayaran'
+            db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+
+        elif transaction_status == 'expire':
+            update_status = 'Pembayaran Kadaluarsa'
+            db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+        
+        elif transaction_status == 'cancel':
+            update_status = 'Pembayaran Dibatalkan'
+            db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+
+        elif transaction_status == 'deny':
+            update_status = 'Pembayaran Ditolak'
+            db.pesanan.update_one({'_id': ObjectId(pesanan_id_from_order_id)}, {'$set': {'status_pesanan': update_status}})
+
+        else:
+            app.logger.info(f"Unhandled Midtrans transaction status: {transaction_status} for Order ID: {order_id}")
+            return "Status tidak ditangani", 200
+
+        return "OK", 200
+
+    except Exception as e:
+        app.logger.error(f"Error processing Midtrans notification: {e}", exc_info=True)
+        return "Internal Server Error", 500
+
+
+@app.route('/midtrans_payment_finish', methods=['GET'])
+def midtrans_payment_finish():
+    # Ini adalah URL yang akan di-redirect oleh Midtrans setelah pembayaran selesai/gagal
+    # Menampilkan pesan sukses/gagal kepada user di sini
+    # Atau mengarahkan kembali ke halaman riwayat pemesanan
+    transaction_status = request.args.get('transaction_status')
+    order_id = request.args.get('order_id')
+
+    if transaction_status == 'settlement' or transaction_status == 'capture':
+        flash("Pembayaran berhasil diproses!", "success")
+    elif transaction_status == 'pending':
+        flash("Pembayaran Anda sedang menunggu konfirmasi. Silakan selesaikan pembayaran Anda.", "info")
+    else:
+        flash("Pembayaran gagal atau dibatalkan. Silakan coba lagi.", "danger")
+
+    return redirect(url_for('riwayat_pemesanan'))
+
+
+
 
 
 if __name__ == "__main__":

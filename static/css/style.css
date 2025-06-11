@@ -2108,6 +2108,21 @@ ul .catatan > li {
   }
 }
 
+.dslybaru-scroll-horizontal {
+  display: flex;
+  flex-direction: row;
+  overflow-x: auto;
+  padding-bottom: 1rem;
+  gap: 5rem;
+  max-width: 800px;
+  margin: 0 auto;
+}
+.dslybaru-scroll-horizontal .card-paket {
+  /* Mengubah .dslybaru-card menjadi .card-paket */
+  flex: 0 0 auto; /* Memastikan kartu tidak menyusut atau membesar */
+  width: 350px;
+}
+
 /* ========================================== FORM PEMESANAN ======================================== */
 .formlayanan-text-center {
   /*teks keterangan form pemesanan*/
@@ -2660,6 +2675,16 @@ ul .catatan > li {
   font-size: 12px;
 }
 
+#editprofil-profileImage {
+  /* Properti ini sudah ada sebagai atribut HTML, tapi baik untuk dideklarasikan di CSS juga */
+  width: 150px;
+  height: 150px;
+  border-radius: 50%;
+  /* INI YANG PENTING: */
+  object-fit: cover; /* Ini akan mencegah gambar penyet dengan memotong kelebihan */
+  object-position: center; /* Opsional: Memastikan bagian tengah gambar yang terlihat */
+}
+
 .profil-button:hover {
   background-color: #86ade8;
   color: #fff;
@@ -2687,6 +2712,20 @@ ul .catatan > li {
   position: relative;
   display: inline-block;
 }
+
+#editprofil-editProfileImage {
+  /* Ini adalah ID gambar di dalam modal edit */
+  width: 80px; /* Pastikan width dan height sama seperti di HTML */
+  height: 80px; /* Pastikan width dan height sama seperti di HTML */
+  border-radius: 50%; /* Membuatnya lingkaran, sesuai dengan rounded-circle */
+  background-color: #eaf4ff; /* Sesuai dengan background-color di .profil-avatar */
+  padding: 1.5px; /* Sesuai dengan p-1.5 di HTML Anda */
+
+  /* INI YANG PENTING UNTUK MENCEGAH PENYET: */
+  object-fit: cover; /* Pastikan gambar mengisi lingkaran tanpa penyet, akan memotong jika perlu */
+  object-position: center;
+}
+
 .editprofil-camera-label {
   /* label untuk input file yang button gambar kamera */
   position: absolute;
@@ -2759,6 +2798,13 @@ ul .catatan > li {
   transform: scale(0.98);
   background-color: #5b90ed;
   color: #ffffff;
+}
+
+.editprofil-btneditsimpan:disabled {
+  background-color: #cccccc; /* Warna abu-abu yang lebih terang */
+  color: #666666; /* Warna teks yang lebih gelap */
+  cursor: not-allowed; /* Kursor "tidak diizinkan" */
+  opacity: 0.7;
 }
 
 /* =============================== LOGIN - LUPA KATA SANDI - DAFTAR ================================= */
@@ -3441,6 +3487,7 @@ main.riwayatpemesanan-container {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  margin-bottom: 4rem;
 }
 
 /* Header */
@@ -3524,10 +3571,11 @@ div.riwayatpemesanan-details {
   background-color: #e8f0fa;
   border-radius: 10px;
   padding: 1.5rem;
-  display: grid;
+  display: flex;
   grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
-  gap: 1.5rem 2rem;
+  gap: 5rem;
   color: #111827;
+  justify-content: center;
 }
 
 /* info block */
